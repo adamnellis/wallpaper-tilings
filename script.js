@@ -83,8 +83,8 @@ function getColour2(x, y) {
 }
 
 function getColour(x, y) {
-  const newX = 10*(x - 0.5)
-  const newY = 10*(y - 0.5)
+  const newX = x
+  const newY = y
   
   const r = Math.sqrt(newX*newX + newY*newY)
   let theta = Math.atan2(newY, newX)
@@ -94,9 +94,121 @@ function getColour(x, y) {
   
   const h = theta / (2*Math.PI)
   const s = r
-  const v = 2/r
+  const v = 1/Math.sqrt(Math.sqrt(r))
   
   return [...hsvToRgb(h, s, v), 1]
+}
+
+function mul2([re1, im1], [re2, im2]) {
+  return [re1*re2 - im1*im2, re1*im2 + re2*im1]
+}
+
+function add2([re1, im1], [re2, im2]) {
+  return [re1 + re2, im1 + im2]
+}
+
+function mul(...zs) {
+  return zs.reduce(mul2, [1, 1])
+}
+
+function add(...zs) {
+  return zs.reduce(add2, [0, 0])
+}
+
+function smul(scalar, [re, im]) {
+  return [scalar*re, scalar*im]
+}
+
+function cart_to_polar(re, im) {
+  return [Math.sqrt(re*re + im*im), Math.atan2(im, re)]
+}
+
+function polar_to_cart(r, theta) {
+  return [r*Math.cos(theta), r*Math.sin(theta)]
+}
+
+function rosette1_simplify(re, im) {
+  // TODO Currently incorrect maths!
+
+  const [r, theta] = cart_to_polar(re, im)
+  
+  // f(z) = z^5z_^0 + z^0z_^5 + a(z^6z_^1 + z^1z_^6) + b(z^4z_^-6 + z^-6z_^4)
+  const a = 0.5
+  const b = 0.25
+  
+  // (r^5, 5 theta) + (r^5, -5 theta) + a(r^7, 5 theta) + a(r^7, -5 theta) + b(r^10, -2 theta) + b(r^10, -10 theta)
+  
+  const [re1, im1] = polar_to_cart(r**5, 5*theta)
+  const [re2, im2] = polar_to_cart(r**5, -5*theta)
+  const [re3, im3] = polar_to_cart(r**7, 5*theta)
+  const [re4, im4] = polar_to_cart(r**7, -5*theta)
+  const [re5, im5] = polar_to_cart(r**10, 10*theta)
+  const [re6, im6] = polar_to_cart(r**10, -10*theta)
+  
+  re_new = re1 + re2 + a*(re3 + re4) + b*(re5 + re6)
+  im_new = im1 + im2 + a*(im3 + im4) + b*(im5 + im6)
+  
+  return [re_new, im_new]
+}
+
+function c_sqrt([re, im]) {
+  const r = Math.sqrt(re*re + im*im)
+  const theta = Math.atan2(im, re)
+  const new_r = Math.sqrt(r)
+  const new_theta = theta/2
+  return [new_r*Math.cos(new_theta), new_r*Math.sin(new_theta)]
+}
+
+function c_one_over([re, im]) {
+  const r = Math.sqrt(re*re + im*im)
+  const theta = Math.atan2(im, re)
+  const new_r = r
+  const new_theta = -theta
+  return [new_r*Math.cos(new_theta), new_r*Math.sin(new_theta)]
+}
+
+function identity(re, im) {
+  return [re, im]
+}
+
+function square(re, im) {
+  newRe = re*re - im*im
+  newIm = 2*re*im
+  return [newRe, newIm]
+}
+
+function rosette1(re, im) {
+  // f(z) = z^5z_^0 + z^0z_^5 + a(z^6z_^1 + z^1z_^6) + b(z^4z_^-6 + z^-6z_^4)
+  const a = 0.5
+  const b = 0.25
+
+  z = [re, im]
+  z_2 = mul(z, z)
+  z_4 = mul(z_2, z_2)
+  z_5 = mul(z, z_4)
+  z_6 = mul(z_2, z_4)
+  z_m1 = c_one_over(z)
+  z_m2 = mul(z_m1, z_m1)
+  z_m4 = mul(z_m2, z_m2)
+  z_m6 = mul(z_m4, z_m2)
+  y = [re, -im]
+  y_2 = mul(y, y)
+  y_4 = mul(y_2, y_2)
+  y_5 = mul(y, y_4)
+  y_6 = mul(y_2, y_4)
+  y_m1 = c_one_over(y)
+  y_m2 = mul(y_m1, y_m1)
+  y_m4 = mul(y_m2, y_m2)
+  y_m6 = mul(y_m4, y_m2)
+
+  return add(z_5, y_5, smul(a, add(mul(z_6, y), mul(z, y_6))), smul(b, add(mul(z_4, y_m6), mul(z_m6, y_4))))
+}
+
+function applyFunction(re, im) {
+  //return identity(re, im)
+  //return square(re, im)
+  //return rosette1(re, im)
+  return rosette1_simplify(re, im)
 }
 
 function main() {
@@ -120,7 +232,10 @@ function main() {
       const y = (height - pixelY) / height
       //console.log({x, y})
       
-      const [red, green, blue, alpha] = getColour(x, y)
+      const newX = 10*(x - 0.5)
+      const newY = 10*(y - 0.5)
+      
+      const [red, green, blue, alpha] = getColour(...applyFunction(newX, newY))
       
       const index = (pixelY * width + pixelX) * 4
       data[index] = red * 255
